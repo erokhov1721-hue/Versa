@@ -16,9 +16,18 @@ _CSS = """
   table.versa-summary thead th {
     position: sticky; top: 0; background: #333; color: #fff; z-index: 3;
   }
-  table.versa-summary td.pinned, table.versa-summary th.pinned {
-    position: sticky; left: 0; background: #fafafa; z-index: 2;
+  table.versa-summary td.pinned {
+    position: sticky; background: #fafafa; z-index: 2;
   }
+  table.versa-summary th.pinned {
+    position: sticky; background: #333; color: #fff; z-index: 4;
+  }
+  table.versa-summary td.pinned:nth-child(1), table.versa-summary th.pinned:nth-child(1) { left: 0; width: 70px; }
+  table.versa-summary td.pinned:nth-child(2), table.versa-summary th.pinned:nth-child(2) { left: 70px; width: 70px; }
+  table.versa-summary td.pinned:nth-child(3), table.versa-summary th.pinned:nth-child(3) { left: 140px; width: 160px; }
+  table.versa-summary td.pinned:nth-child(4), table.versa-summary th.pinned:nth-child(4) { left: 300px; width: 280px; }
+  table.versa-summary td.pinned:nth-child(5), table.versa-summary th.pinned:nth-child(5) { left: 580px; width: 70px; }
+  table.versa-summary td.pinned:nth-child(6), table.versa-summary th.pinned:nth-child(6) { left: 650px; width: 70px; }
   table.versa-summary tbody tr:nth-child(even) td { background-color: #f7f7f7; }
   .versa-lot, .versa-total { background-color: #e6e6e6 !important; font-weight: bold; }
   .versa-level-1 { font-weight: bold; }
@@ -68,6 +77,14 @@ def _cell_html(cell, divisor: int) -> str:
     return f'<td style="{style}"{title_attr}>{body}{badge_html}{warn_html}{dev_html}</td>'
 
 
+def _row_display_name(row, money_unit: str, vat_rate: float) -> str:
+    if row.kind == "total_vat":
+        return f"{row.name} ({_fmt_pct(vat_rate)}%), {money_unit}"
+    if row.kind in ("total_incl_vat", "total_excl_vat"):
+        return f"{row.name}, {money_unit}"
+    return row.name
+
+
 def _row_class(row) -> str:
     if row.kind == "lot":
         return "versa-lot"
@@ -114,10 +131,10 @@ def render_summary_html(table: SummaryTable, *, money_unit: str = "руб.") -> 
 
         indent = "&nbsp;" * (row.level * 2)
         pinned = (
-            f'<td class="pinned">{row.row or ""}</td>'
+            f'<td class="pinned">{row.pp_number if row.pp_number is not None else ""}</td>'
             f'<td class="pinned">{_escape(row.number)}</td>'
             f'<td class="pinned">{_escape(row.smr_article)}</td>'
-            f'<td class="pinned">{indent}{_escape(row.name)}</td>'
+            f'<td class="pinned">{indent}{_escape(_row_display_name(row, money_unit, table.vat_rate))}</td>'
             f'<td class="pinned">{_escape(row.unit or "")}</td>'
             f'<td class="pinned">{row.qty if row.qty is not None else ""}</td>'
         )

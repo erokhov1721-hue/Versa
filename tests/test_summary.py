@@ -1,6 +1,75 @@
 import pytest
 
-from versa.core.summary import DetailLevel, build_summary_table
+from versa.core.models import (
+    ComparisonMode,
+    ParticipantInfo,
+    Position,
+    PositionPrice,
+    PriceBreakdown,
+    PriceStatus,
+    Section,
+    Tender,
+)
+from versa.core.summary import DetailLevel, SummaryCell, _apply_position_highlight, build_summary_table
+
+
+def _synthetic_tender_without_lot_row():
+    participants = [
+        ParticipantInfo(id="a", name="А", inn=None, address=None, accreditation_status=None),
+        ParticipantInfo(id="b", name="Б", inn=None, address=None, accreditation_status=None),
+    ]
+
+    def price(total):
+        breakdown = PriceBreakdown(materials=0.0, works=total, overhead=0.0, total=total)
+        return PositionPrice(
+            status=PriceStatus.PRICED, quantity_offered=1.0, unit_price=breakdown,
+            total_for_participant_volume=breakdown, total_for_customer_volume=total,
+            participant_comment=None, mrg_comment=None, pct_of_estimate=None,
+            expected_cost=None,
+        )
+
+    position = Position(
+        row=20, number=201, name="Позиция", unit="шт", customer_quantity=1.0,
+        customer_comment=None, baseline=None,
+        participant_prices={"a": price(100.0), "b": price(150.0)},
+    )
+    # This section has its own position directly — a real section, not a
+    # self-closing "Лот" placeholder — so it must NOT be consumed as the lot row.
+    section = Section(row=19, number="1", title="1. Реальный раздел", level=1,
+                       positions=[position], children=[])
+
+    return Tender(
+        subject="...", object_name="...", address="...", participants=participants,
+        sections=[section], full_sections=[section], default_vat_rate=22.0,
+        mode=ComparisonMode.PEER, warnings=[],
+    )
+
+
+def test_missing_lot_row_does_not_swallow_the_only_real_section():
+    tender = _synthetic_tender_without_lot_row()
+
+    table = build_summary_table(tender, detail_level=DetailLevel.SECTIONS)
+
+    kinds = [row.kind for row in table.rows]
+    assert kinds.count("lot") == 1
+    assert kinds.count("section") == 1  # the real section must still appear
+    lot_row = next(row for row in table.rows if row.kind == "lot")
+    assert lot_row.cells["a"].value == pytest.approx(100.0)
+    assert lot_row.cells["b"].value == pytest.approx(150.0)
+
+
+def test_all_tied_values_highlight_as_min_not_max():
+    # when every participant quotes exactly the same price, lo == hi — the old
+    # "if value==lo: min; if value==hi: max" logic overwrote every cell to
+    # "max" (worst) even though nobody is actually worse than anyone else.
+    cells = {
+        "a": SummaryCell(status="priced", value=100.0),
+        "b": SummaryCell(status="priced", value=100.0),
+    }
+    _apply_position_highlight(cells, ["a", "b"])
+
+    assert cells["a"].highlight == "min"
+    assert cells["b"].highlight == "min"
 
 
 def test_sections_level_shows_lot_plus_18_sections_plus_3_totals_plus_best_row(sample_tender):
@@ -128,6 +197,30 @@ def test_position_level_status_badges(sample_tender):
     lump_cell = position_rows[670].cells["fodd"]
     assert lump_cell.status == "lump_sum"
     assert "паушал" in lump_cell.badge.lower()
+
+
+def test_section_18_erbek_gets_warning_for_declining_most_of_the_section(sample_tender):
+    # erbek priced only 2 of 5 positions in section 18 and marked the rest
+    # not_included, making their nominal section sum (4500 руб.) trivially the
+    # smallest — the ⚠ badge must flag this as an imprecise comparison.
+    table = build_summary_table(sample_tender, detail_level=DetailLevel.SECTIONS)
+    section_18 = next(row for row in table.rows if row.kind == "section" and row.number == "18")
+    assert section_18.cells["erbek"].warning is not None
+
+
+def test_best_offer_at_position_level_never_names_a_non_priced_participant(sample_tender):
+    # row 279 "Устройство несущих кронштейнов": nobody has PRICED status (ZERO or
+    # NOT_INCLUDED only) — "лучшее предложение" must not crown whoever declined
+    # the work with the smallest (zero) number.
+    table = build_summary_table(sample_tender, detail_level=DetailLevel.POSITIONS)
+    position_rows = {row.row: row for row in table.rows if row.kind == "position"}
+    assert position_rows[279].best is None
+
+    # sanity check across the whole file: no position's best ever points at a
+    # cell whose own status isn't "priced"
+    for row in table.rows:
+        if row.kind == "position" and row.best is not None:
+            assert row.cells[row.best.participant_id].status == "priced"
 
 
 def test_position_tooltip_includes_price_breakdown(sample_tender):

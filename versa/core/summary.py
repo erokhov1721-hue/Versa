@@ -8,7 +8,10 @@ from versa.core.aggregate import section_totals
 from versa.core.models import ComparisonMode, Position, PriceStatus, Section, Tender
 
 _ACTUALLY_PRICED = (PriceStatus.PRICED, PriceStatus.LUMP_SUM)
-_WARNING_STATUSES = (PriceStatus.LUMP_SUM, PriceStatus.PLACEHOLDER, PriceStatus.INCLUDED_ELSEWHERE)
+_WARNING_STATUSES = (
+    PriceStatus.LUMP_SUM, PriceStatus.PLACEHOLDER, PriceStatus.INCLUDED_ELSEWHERE,
+    PriceStatus.NOT_INCLUDED,
+)
 
 
 class DetailLevel(str, Enum):
@@ -59,6 +62,7 @@ class SummaryRow:
     baseline_cell: Optional[SummaryCell] = None
     best: Optional[BestOffer] = None
     best_by_section_counts: Optional[dict[str, int]] = None
+    pp_number: Optional[int] = None
 
 
 @dataclass
@@ -130,7 +134,7 @@ def _apply_position_highlight(cells: dict[str, SummaryCell], participant_ids: li
     for pid, value in priced.items():
         if value == lo:
             cells[pid].highlight = "min"
-        if value == hi:
+        elif value == hi:
             cells[pid].highlight = "max"
 
 
@@ -138,7 +142,10 @@ def _section_warning(section: Section, pid: str) -> Optional[str]:
     for position in section.iter_positions():
         price = position.participant_prices.get(pid)
         if price and price.status in _WARNING_STATUSES:
-            return "Неточное сравнение: в разделе есть паушал/заглушка/включено в другую позицию"
+            return (
+                "Неточное сравнение: в разделе есть паушал/заглушка/включено в другую "
+                "позицию/не включено у одного из участников"
+            )
     return None
 
 
@@ -154,7 +161,7 @@ def _cells_for_section(section: Section, participant_ids: list[str]) -> dict[str
         for cell in cells.values():
             if cell.value == lo:
                 cell.highlight = "min"
-            if cell.value == hi:
+            elif cell.value == hi:
                 cell.highlight = "max"
     return cells
 
@@ -188,11 +195,14 @@ def _set_deviation_labels(
 
 def _best_offer(
     cells: dict[str, SummaryCell], participants: list[ParticipantColumnMeta],
+    *, only_priced: bool = False,
 ) -> Optional[BestOffer]:
-    values = sorted(
-        ((pid, c.value) for pid, c in cells.items() if c.value is not None),
-        key=lambda kv: kv[1],
+    eligible = (
+        ((pid, c) for pid, c in cells.items() if c.value is not None and c.status == "priced")
+        if only_priced
+        else ((pid, c) for pid, c in cells.items() if c.value is not None)
     )
+    values = sorted(((pid, c.value) for pid, c in eligible), key=lambda kv: kv[1])
     if len(values) < 2:
         return None
     (best_pid, best_value), (_, second_value) = values[0], values[1]
@@ -254,7 +264,7 @@ def _walk_section(
 
     kind = "section" if not ancestors else "subsection"
     rows.append(SummaryRow(
-        kind=kind, row=section.row, number=section.number,
+        kind=kind, row=section.row, pp_number=section.a_number, number=section.number,
         smr_article=section.title if section.title else "",
         name=section.title, unit=None, qty=None,
         level=len(ancestors) + 1, is_filled=is_filled,
@@ -281,9 +291,9 @@ def _walk_section(
         for position in section.positions:
             price_cells = {pid: _cell_for_position(position, pid) for pid in participant_ids}
             _apply_position_highlight(price_cells, participant_ids)
-            position_best = _best_offer(price_cells, participants)
+            position_best = _best_offer(price_cells, participants, only_priced=True)
             rows.append(SummaryRow(
-                kind="position", row=position.row, number="",
+                kind="position", row=position.row, pp_number=position.number, number="",
                 smr_article="", name=position.name, unit=position.unit,
                 qty=position.customer_quantity, level=len(child_ancestors) + 1,
                 is_filled=is_filled, ancestor_numbers=child_ancestors,
@@ -303,7 +313,16 @@ def build_summary_table(
     rate = vat_rate if vat_rate is not None else tender.default_vat_rate
 
     rows: list[SummaryRow] = []
-    lot_section, *real_sections = tender.full_sections
+    first, *rest = tender.full_sections
+    if not first.children and not first.positions:
+        # a genuine "Лот №..." row: it closes itself the instant the next
+        # same-level section arrives, so it never gets real children/positions
+        lot_row_number, lot_title = first.row, first.title
+        real_sections = rest
+    else:
+        # no dedicated lot row in this file — every entry is a real section
+        lot_row_number, lot_title = None, "Итого по смете"
+        real_sections = tender.full_sections
 
     grand_totals: dict[str, float] = {pid: 0.0 for pid in participant_ids}
     for section in real_sections:
@@ -317,12 +336,12 @@ def build_summary_table(
         for pid, cell in lot_cells.items():
             if cell.value == lo:
                 cell.highlight = "min"
-            if cell.value == hi:
+            elif cell.value == hi:
                 cell.highlight = "max"
     _set_deviation_labels(lot_cells, tender.mode, None)
     rows.append(SummaryRow(
-        kind="lot", row=lot_section.row, number="", smr_article="",
-        name=lot_section.title, unit=None, qty=None, level=0, is_filled=True,
+        kind="lot", row=lot_row_number, number="", smr_article="",
+        name=lot_title, unit=None, qty=None, level=0, is_filled=True,
         ancestor_numbers=(), cells=lot_cells, best=_best_offer(lot_cells, participants),
     ))
 
@@ -343,12 +362,12 @@ def build_summary_table(
     for pid, cell in total_cells.items():
         if cell.value == min(grand_totals.values()):
             cell.highlight = "min"
-        if cell.value == max(grand_totals.values()):
+        elif cell.value == max(grand_totals.values()):
             cell.highlight = "max"
     _set_deviation_labels(total_cells, tender.mode, None)
     rows.append(SummaryRow(
         kind="total_incl_vat", row=None, number="", smr_article="",
-        name="ИТОГО, руб. с учётом НДС", unit=None, qty=None, level=0, is_filled=True,
+        name="ИТОГО с учётом НДС", unit=None, qty=None, level=0, is_filled=True,
         ancestor_numbers=(), cells=total_cells, best=_best_offer(total_cells, participants),
     ))
 
@@ -367,7 +386,7 @@ def build_summary_table(
     }
     rows.append(SummaryRow(
         kind="total_excl_vat", row=None, number="", smr_article="",
-        name="ИТОГО, руб. без учёта НДС", unit=None, qty=None, level=0, is_filled=True,
+        name="ИТОГО без учёта НДС", unit=None, qty=None, level=0, is_filled=True,
         ancestor_numbers=(), cells=excl_cells,
     ))
 

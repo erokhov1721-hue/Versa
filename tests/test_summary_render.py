@@ -75,6 +75,70 @@ def test_sticky_css_present_for_header_and_pinned_columns():
     assert "position: sticky" in html or "position:sticky" in html
 
 
+def test_pinned_columns_each_get_their_own_left_offset():
+    # all 6 pinned columns sharing left:0 collapses them on top of each other
+    # once the table actually scrolls horizontally — each needs a distinct,
+    # cumulative offset.
+    html = render_summary_html(_table([]))
+    offsets = {"left: 0", "left: 70px", "left: 140px", "left: 300px", "left: 580px", "left: 650px"}
+    for offset in offsets:
+        assert offset in html, offset
+
+
+def test_pinned_header_cells_stay_readable_and_on_top():
+    # th.pinned used to win the background (light) via specificity while
+    # "thead th"'s color:#fff stayed in effect — white text on a light
+    # background. th.pinned must set its own dark background + white text,
+    # and sit above both plain header cells and pinned body cells.
+    html = render_summary_html(_table([]))
+    assert "table.versa-summary th.pinned" in html
+    assert "z-index: 4" in html
+
+
+def test_pp_number_column_shows_real_pp_not_the_sheet_row():
+    # sheet row 670 is real п/п 656 — the pinned "№ п/п" column must show the
+    # real number (pp_number), not the internal sheet row index.
+    row = SummaryRow(
+        kind="position", row=670, number="", smr_article="", name="Поз.", unit="шт",
+        qty=1.0, level=2, is_filled=True, ancestor_numbers=("10",),
+        cells={
+            "a": SummaryCell(status="priced", value=1.0),
+            "b": SummaryCell(status="priced", value=2.0),
+        },
+        pp_number=656,
+    )
+    html = render_summary_html(_table([row]))
+
+    assert ">656<" in html
+    assert ">670<" not in html
+
+
+def test_totals_rows_show_the_active_unit_and_vat_rate():
+    total_row = SummaryRow(
+        kind="total_incl_vat", row=None, number="", smr_article="",
+        name="ИТОГО с учётом НДС", unit=None, qty=None, level=0, is_filled=True,
+        ancestor_numbers=(),
+        cells={"a": SummaryCell(status="priced", value=100.0), "b": SummaryCell(status="priced", value=200.0)},
+    )
+    vat_row = SummaryRow(
+        kind="total_vat", row=None, number="", smr_article="", name="В том числе НДС",
+        unit=None, qty=None, level=0, is_filled=True, ancestor_numbers=(),
+        cells={"a": SummaryCell(status="priced", value=10.0), "b": SummaryCell(status="priced", value=20.0)},
+    )
+    table = SummaryTable(
+        participants=[
+            ParticipantColumnMeta(id="a", name='ООО "А"', inn="111"),
+            ParticipantColumnMeta(id="b", name='ООО "Б"', inn="222"),
+        ],
+        has_baseline=False, vat_rate=20.0, rows=[total_row, vat_row],
+    )
+
+    html = render_summary_html(table, money_unit="млн руб.")
+
+    assert "ИТОГО с учётом НДС, млн руб." in html
+    assert "В том числе НДС (20,0%), млн руб." in html
+
+
 def test_baseline_column_appears_only_when_present():
     row = SummaryRow(
         kind="section", row=1, number="1", smr_article="1. Раздел", name="1. Раздел",

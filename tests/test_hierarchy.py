@@ -56,6 +56,15 @@ def test_position_number_comes_from_column_a_not_the_sheet_row():
     assert position.number == 656
 
 
+def test_section_number_a_comes_from_column_a():
+    # Real file: sheet row 225 is п/п 211 (column A) for section "6" itself.
+    # The "Сводная по смете" screen's «№ п/п» column must show this, not
+    # the sheet row, for section rows too (matching what Position already does).
+    rows = [RawRow(row=225, a=211, b="6", c="6. Фасадные работы", d="Устройство фасадов")]
+    tree = build_section_tree(rows)
+    assert tree[0].a_number == 211
+
+
 def test_non_numeric_b_value_is_not_treated_as_a_section():
     rows = [
         RawRow(row=225, a=211, b="6", c="6. Фасадные работы", d="Устройство фасадов"),

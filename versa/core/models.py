@@ -85,6 +85,7 @@ class Section:
     level: int
     positions: list[Position] = field(default_factory=list)
     children: list["Section"] = field(default_factory=list)
+    a_number: Optional[int] = None
 
     def iter_positions(self) -> Iterator[Position]:
         yield from self.positions

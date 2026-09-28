@@ -30,6 +30,15 @@ def _level(number: str) -> int:
     return len(number.rstrip(".").split("."))
 
 
+def _int_or_none(value) -> Optional[int]:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def build_section_tree(rows: list[RawRow]) -> list[Section]:
     roots: list[Section] = []
     stack: list[Section] = []  # top of stack = current deepest open section
@@ -44,7 +53,7 @@ def build_section_tree(rows: list[RawRow]) -> list[Section]:
                 stack.pop()
 
             section = Section(row=raw.row, number=number, title=str(title).strip(),
-                               level=level)
+                               level=level, a_number=_int_or_none(raw.a))
             if stack:
                 stack[-1].children.append(section)
             else:
@@ -54,14 +63,8 @@ def build_section_tree(rows: list[RawRow]) -> list[Section]:
         elif _is_blank(raw.b) and not _is_blank(raw.d):
             if not stack:
                 continue  # position before any section header; nothing to attach to
-            number = None
-            if raw.a is not None:
-                try:
-                    number = int(raw.a)
-                except (TypeError, ValueError):
-                    number = None
             position = Position(
-                row=raw.row, number=number, name=str(raw.d).strip(), unit=None,
+                row=raw.row, number=_int_or_none(raw.a), name=str(raw.d).strip(), unit=None,
                 customer_quantity=None, customer_comment=None, baseline=None,
                 participant_prices={},
             )
