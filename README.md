@@ -16,6 +16,18 @@ streamlit run versa/ui/app.py
 
 Загрузите файл сводной таблицы (.xlsx, лист «3\_ ПОДРОБНАЯ»).
 
+## Запуск в Docker
+
+```bash
+docker build -t versa:latest .
+docker run -d --name versa --restart unless-stopped -p 8501:8501 versa:latest
+```
+
+Приложение будет на порту 8501 (порт можно поменять флагом `-p` и опцией
+`--server.port` в Dockerfile). `samples/` и `docs/` в образ не попадают
+(см. `.dockerignore`) — в них тестовые данные тендера и рабочие планы,
+им незачем лежать на боевом сервере.
+
 ## Тесты
 
 ```bash
