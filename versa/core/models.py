@@ -112,6 +112,7 @@ class Tender:
     address: str
     participants: list[ParticipantInfo]
     sections: list[Section]
+    full_sections: list[Section]
     mode: ComparisonMode
     warnings: list[Warning]
 

@@ -133,6 +133,23 @@ def test_parse_tender_accepts_a_file_like_object_not_just_a_path(sample_path):
     assert tender.subject == '№943-ТУ "Казачий 1 оч. НС_Генподряд"'
 
 
+def test_full_sections_includes_all_18_real_sections_plus_lot(sample_tender):
+    numbers = [s.number for s in sample_tender.full_sections]
+    assert len(numbers) == 19  # lot row + 18 real top-level sections
+    assert numbers.count("1") == 2  # the lot row and section "1" share a B-number
+
+
+def test_full_sections_excludes_the_commercial_terms_block(sample_tender):
+    names = {s.title for s in sample_tender.full_sections if s.title}
+    assert "Аванс" not in names
+    assert not any(s.number == "Аванс" for s in sample_tender.full_sections)
+
+
+def test_pruned_sections_are_unaffected_by_full_sections_existing(sample_tender):
+    top_numbers = {s.number for s in sample_tender.sections}
+    assert top_numbers == {"6", "10", "18"}
+
+
 def test_ges_placeholder_count(sample_tender):
     # 99 GES cells are priced at 0.01 ₽ in the raw sheet, but most carry a
     # comment that reclassifies them: 80 say "включено в п/п NNN"

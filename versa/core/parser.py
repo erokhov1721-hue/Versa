@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from typing import BinaryIO
 
@@ -162,14 +163,14 @@ _ACTUALLY_PRICED = (PriceStatus.PRICED, PriceStatus.LUMP_SUM)
 def _prune_empty_sections(sections: list[Section]) -> list[Section]:
     kept = []
     for section in sections:
-        section.children = _prune_empty_sections(section.children)
+        pruned_children = _prune_empty_sections(section.children)
         has_price = any(
             price.status in _ACTUALLY_PRICED or position.baseline is not None
             for position in section.iter_positions()
             for price in position.participant_prices.values()
         )
-        if has_price or section.children:
-            kept.append(section)
+        if has_price or pruned_children:
+            kept.append(replace(section, children=pruned_children))
     return kept
 
 
@@ -214,17 +215,20 @@ def parse_tender(source: str | Path | BinaryIO) -> Tender:
         for position in section.iter_positions():
             _fill_position_data(ws, position, layout, warnings)
 
-    sections = _prune_empty_sections(sections)
-    _flag_lump_sums(sections, [p.id for p in participants], warnings)
+    full_sections = sections
+    _flag_lump_sums(full_sections, [p.id for p in participants], warnings)
+
+    pruned_sections = _prune_empty_sections(full_sections)
 
     has_baseline = any(
         position.baseline is not None
-        for section in sections
+        for section in pruned_sections
         for position in section.iter_positions()
     )
     mode = ComparisonMode.BASELINE if has_baseline else ComparisonMode.PEER
 
     return Tender(
         subject=subject, object_name=object_name, address=address,
-        participants=participants, sections=sections, mode=mode, warnings=warnings,
+        participants=participants, sections=pruned_sections, full_sections=full_sections,
+        mode=mode, warnings=warnings,
     )

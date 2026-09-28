@@ -54,3 +54,15 @@ def test_position_number_comes_from_column_a_not_the_sheet_row():
     position = tree[0].positions[0]
     assert position.row == 670
     assert position.number == 656
+
+
+def test_non_numeric_b_value_is_not_treated_as_a_section():
+    rows = [
+        RawRow(row=225, a=211, b="6", c="6. Фасадные работы", d="Устройство фасадов"),
+        RawRow(row=1608, a=1, b="Аванс", c=None, d=None),
+        RawRow(row=1609, a=2, b="Гарантия на работы, месяц/год", c=None, d=None),
+    ]
+
+    tree = build_section_tree(rows)
+
+    assert [s.number for s in tree] == ["6"]

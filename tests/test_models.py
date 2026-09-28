@@ -35,7 +35,7 @@ def test_tender_participants_lookup_by_id():
     p1 = ParticipantInfo(id="parallel", name='ООО "ПАРАЛЛЕЛЬ"', inn="9715299145",
                           address="...", accreditation_status="Не аккредитован")
     tender = Tender(subject="...", object_name="...", address="...",
-                     participants=[p1], sections=[], mode=ComparisonMode.PEER,
+                     participants=[p1], sections=[], full_sections=[], mode=ComparisonMode.PEER,
                      warnings=[])
     assert tender.participant_by_id("parallel") is p1
     assert tender.participant_by_id("missing") is None

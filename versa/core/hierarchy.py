@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import re
 from typing import NamedTuple, Optional
 
 from versa.core.models import Position, Section
+
+_SECTION_NUMBER_RE = re.compile(r"^\d+(\.\d+)*\.?$")
 
 
 class RawRow(NamedTuple):
@@ -17,6 +20,12 @@ def _is_blank(value: Optional[str]) -> bool:
     return value is None or str(value).strip() == ""
 
 
+def _is_section_number(value: Optional[str]) -> bool:
+    if _is_blank(value):
+        return False
+    return bool(_SECTION_NUMBER_RE.match(str(value).strip()))
+
+
 def _level(number: str) -> int:
     return len(number.rstrip(".").split("."))
 
@@ -26,7 +35,7 @@ def build_section_tree(rows: list[RawRow]) -> list[Section]:
     stack: list[Section] = []  # top of stack = current deepest open section
 
     for raw in rows:
-        if not _is_blank(raw.b):
+        if _is_section_number(raw.b):
             number = str(raw.b).strip().rstrip(".")
             title = raw.c if not _is_blank(raw.c) else raw.d
             level = _level(number)
@@ -42,7 +51,7 @@ def build_section_tree(rows: list[RawRow]) -> list[Section]:
                 roots.append(section)
             stack.append(section)
 
-        elif not _is_blank(raw.d):
+        elif _is_blank(raw.b) and not _is_blank(raw.d):
             if not stack:
                 continue  # position before any section header; nothing to attach to
             number = None
