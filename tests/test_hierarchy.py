@@ -40,3 +40,17 @@ def test_title_falls_back_to_d_when_c_empty():
     rows = [RawRow(row=98, b="3.2.1", c=None, d="Постоянный дренаж")]
     tree = build_section_tree(rows)
     assert tree[0].title == "Постоянный дренаж"
+
+
+def test_position_number_comes_from_column_a_not_the_sheet_row():
+    # Real file: sheet row 670 is п/п 656 (column A), a 14-row offset from
+    # the openpyxl row index. Warnings/UI must cite the real п/п, not the
+    # row index.
+    rows = [
+        RawRow(row=669, a=655, b="10.1.1", c="10.1.1. Монтаж щитов", d="Монтаж щитов"),
+        RawRow(row=670, a=656, b=None, c=None, d="Монтаж щитов питания"),
+    ]
+    tree = build_section_tree(rows)
+    position = tree[0].positions[0]
+    assert position.row == 670
+    assert position.number == 656

@@ -51,8 +51,45 @@ def test_rik_customer_total_recomputed_not_read_from_broken_formula(sample_tende
     assert abs(rik_price.total_for_customer_volume - expected) < 0.01
 
 
-def test_formula_error_produces_warning(sample_tender):
-    assert any(w.type == WarningType.FORMULA_ERROR for w in sample_tender.warnings)
+def test_num_converts_excel_formula_error_to_none_with_warning():
+    from versa.core.parser import _num
+
+    warnings = []
+    result = _num("#DIV/0!", row=42, col=5, warnings=warnings)
+
+    assert result is None
+    assert len(warnings) == 1
+    assert warnings[0].type == WarningType.FORMULA_ERROR
+    assert warnings[0].row == 42
+
+
+def test_pct_of_estimate_divide_by_zero_does_not_spam_formula_error_warnings(sample_tender):
+    # "% от р/с" divides by an empty расчётная стоимость (Mode Б), so it is
+    # #DIV/0! on every single row by construction — not an actionable
+    # data-quality warning. It must not drown out the warnings that are
+    # (lump_sum, included_elsewhere, volume_mismatch, genuine placeholders).
+    formula_errors = [w for w in sample_tender.warnings if w.type == WarningType.FORMULA_ERROR]
+    assert len(formula_errors) == 0
+    assert any(w.type == WarningType.LUMP_SUM for w in sample_tender.warnings)
+    assert any(w.type == WarningType.INCLUDED_ELSEWHERE for w in sample_tender.warnings)
+
+
+def test_position_number_is_the_real_pp_from_column_a(sample_tender):
+    # Sheet row 670 is real п/п 656 (column A) — a 14-row offset from the
+    # openpyxl row index. Anything that reports "п/п N" to the user must
+    # use this, not the row.
+    section_10 = next(s for s in sample_tender.sections if s.number == "10")
+    position = next(p for p in section_10.iter_positions() if p.row == 670)
+    assert position.number == 656
+
+
+def test_lump_sum_warning_cites_real_pp_not_sheet_row(sample_tender):
+    lump_sum_warnings = [w for w in sample_tender.warnings if w.type == WarningType.LUMP_SUM]
+    assert len(lump_sum_warnings) == 1
+    warning = lump_sum_warnings[0]
+    assert warning.participant_id == "fodd"
+    assert "п/п 656" in warning.message
+    assert "п/п 670" not in warning.message
 
 
 def test_ges_placeholder_count(sample_tender):

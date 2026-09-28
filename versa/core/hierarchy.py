@@ -10,6 +10,7 @@ class RawRow(NamedTuple):
     b: Optional[str]
     c: Optional[str]
     d: Optional[str]
+    a: Optional[object] = None  # real "№ п/п" from column A, distinct from the sheet row index
 
 
 def _is_blank(value: Optional[str]) -> bool:
@@ -44,8 +45,14 @@ def build_section_tree(rows: list[RawRow]) -> list[Section]:
         elif not _is_blank(raw.d):
             if not stack:
                 continue  # position before any section header; nothing to attach to
+            number = None
+            if raw.a is not None:
+                try:
+                    number = int(raw.a)
+                except (TypeError, ValueError):
+                    number = None
             position = Position(
-                row=raw.row, number=None, name=str(raw.d).strip(), unit=None,
+                row=raw.row, number=number, name=str(raw.d).strip(), unit=None,
                 customer_quantity=None, customer_comment=None, baseline=None,
                 participant_prices={},
             )

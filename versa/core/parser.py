@@ -76,10 +76,11 @@ def _read_participants(ws, layout: Layout) -> list[ParticipantInfo]:
 def _read_raw_rows(ws, last_row: int) -> list[RawRow]:
     rows = []
     for r in range(14, last_row + 1):
+        a = ws.cell(row=r, column=1).value
         b = ws.cell(row=r, column=2).value
         c = ws.cell(row=r, column=3).value
         d = ws.cell(row=r, column=4).value
-        rows.append(RawRow(row=r, b=b, c=c, d=d))
+        rows.append(RawRow(row=r, a=a, b=b, c=c, d=d))
     return rows
 
 
@@ -131,7 +132,10 @@ def _fill_position_data(ws, position: Position, layout: Layout, warnings: list[W
 
         pct = None
         if block.pct_col is not None:
-            pct = _num(ws.cell(row=row, column=block.pct_col).value, row, block.pct_col, warnings)
+            # "% от р/с" divides by расчётная стоимость: when the baseline is
+            # empty (Mode Б) this is #DIV/0! on every single row by
+            # construction, not a data-quality problem — don't warn about it.
+            pct = _num(ws.cell(row=row, column=block.pct_col).value, row, block.pct_col, [])
         expected_cost = _num(
             ws.cell(row=row, column=block.expected_cost_col).value, row, block.expected_cost_col, warnings
         )
@@ -182,9 +186,10 @@ def _flag_lump_sums(sections: list[Section], participant_ids: list[str], warning
                 only_position.participant_prices[pid] = PositionPrice(
                     **{**old_price.__dict__, "status": PriceStatus.LUMP_SUM}
                 )
+                pp_label = f"п/п {only_position.number}" if only_position.number is not None else f"строка {only_row}"
                 warnings.append(Warning(
                     type=WarningType.LUMP_SUM, row=only_row, participant_id=pid,
-                    message=f"Участник дал весь раздел {section.number} одной строкой (п/п {only_row})",
+                    message=f"Участник дал весь раздел {section.number} одной строкой ({pp_label})",
                 ))
 
 
