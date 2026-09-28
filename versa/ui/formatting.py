@@ -11,3 +11,9 @@ def to_rubles(value: float | None) -> str:
     if value is None:
         return "—"
     return f"{value:,.0f}".replace(",", " ")
+
+
+def to_thousands(value: float | None) -> str:
+    if value is None:
+        return "—"
+    return f"{value / 1_000:,.0f}".replace(",", " ")

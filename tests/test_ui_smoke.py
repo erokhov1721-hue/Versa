@@ -41,12 +41,43 @@ def test_rubles_toggle_switches_summary_line_formatting(sample_path):
     )
     at.run(timeout=60)
 
-    at.checkbox[0].check()
+    rubles_checkbox = next(
+        cb for cb in at.checkbox if cb.label == "Показывать полные рубли вместо млн ₽"
+    )
+    rubles_checkbox.check()
     at.run(timeout=60)
 
     assert not at.exception
     md = [m.value for m in at.markdown]
     assert any("₽" in m and "млн" not in m for m in md)
+
+
+def test_summary_tab_is_the_default_and_renders_without_exception(sample_path):
+    at = AppTest.from_file(APP_PATH)
+    at.run(timeout=60)
+    at.get("file_uploader")[0].upload(
+        sample_path.name, sample_path.read_bytes(),
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    at.run(timeout=60)
+
+    assert not at.exception
+    assert len(at.tabs) == 2
+    assert at.tabs[0].label == "Сводная по смете"
+    assert at.tabs[1].label == "Аналитика"
+
+
+def test_analytics_tab_still_has_the_old_charts(sample_path):
+    at = AppTest.from_file(APP_PATH)
+    at.run(timeout=60)
+    at.get("file_uploader")[0].upload(
+        sample_path.name, sample_path.read_bytes(),
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    at.run(timeout=60)
+
+    assert not at.exception
+    assert len(at.get("plotly_chart")) == 3  # waterfall, diff, heatmap — unchanged from before
 
 
 def test_invalid_file_shows_friendly_error_not_a_traceback():
