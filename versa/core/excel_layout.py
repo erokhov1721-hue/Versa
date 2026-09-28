@@ -213,3 +213,16 @@ def discover_layout(ws) -> Layout:
         ),
         participants=blocks,
     )
+
+
+_VAT_RATE_RE = re.compile(r"НДС\s*(\d+(?:[.,]\d+)?)\s*%")
+
+
+def discover_vat_rate(ws, default: float = 22.0) -> float:
+    for row in (HEADER_ROW_1, HEADER_ROW_2):
+        for col in range(1, ws.max_column + 1):
+            text = _norm(ws.cell(row=row, column=col).value)
+            match = _VAT_RATE_RE.search(text)
+            if match:
+                return float(match.group(1).replace(",", "."))
+    return default

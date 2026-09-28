@@ -113,6 +113,7 @@ class Tender:
     participants: list[ParticipantInfo]
     sections: list[Section]
     full_sections: list[Section]
+    default_vat_rate: float
     mode: ComparisonMode
     warnings: list[Warning]
 

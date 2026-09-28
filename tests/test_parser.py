@@ -150,6 +150,10 @@ def test_pruned_sections_are_unaffected_by_full_sections_existing(sample_tender)
     assert top_numbers == {"6", "10", "18"}
 
 
+def test_default_vat_rate_is_22_percent(sample_tender):
+    assert sample_tender.default_vat_rate == 22.0
+
+
 def test_ges_placeholder_count(sample_tender):
     # 99 GES cells are priced at 0.01 ₽ in the raw sheet, but most carry a
     # comment that reclassifies them: 80 say "включено в п/п NNN"

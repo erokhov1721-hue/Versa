@@ -6,7 +6,7 @@ from typing import BinaryIO
 
 import openpyxl
 
-from versa.core.excel_layout import Layout, PriceCols, discover_layout
+from versa.core.excel_layout import Layout, PriceCols, discover_layout, discover_vat_rate
 from versa.core.hierarchy import RawRow, build_section_tree
 from versa.core.models import (
     BaselinePrice,
@@ -203,6 +203,7 @@ def parse_tender(source: str | Path | BinaryIO) -> Tender:
     ws = wb[SHEET_NAME]
 
     layout = discover_layout(ws)
+    default_vat_rate = discover_vat_rate(ws)
     warnings: list[Warning] = []
 
     subject, object_name, address = _read_header(ws)
@@ -230,5 +231,5 @@ def parse_tender(source: str | Path | BinaryIO) -> Tender:
     return Tender(
         subject=subject, object_name=object_name, address=address,
         participants=participants, sections=pruned_sections, full_sections=full_sections,
-        mode=mode, warnings=warnings,
+        default_vat_rate=default_vat_rate, mode=mode, warnings=warnings,
     )
