@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import BinaryIO
 
 import openpyxl
 
@@ -196,8 +197,8 @@ def _flag_lump_sums(sections: list[Section], participant_ids: list[str], warning
                 ))
 
 
-def parse_tender(path: str | Path) -> Tender:
-    wb = openpyxl.load_workbook(str(path), data_only=True)
+def parse_tender(source: str | Path | BinaryIO) -> Tender:
+    wb = openpyxl.load_workbook(source, data_only=True)
     ws = wb[SHEET_NAME]
 
     layout = discover_layout(ws)

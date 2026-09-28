@@ -1,4 +1,7 @@
+import io
+
 from versa.core.models import ComparisonMode, PriceStatus, WarningType
+from versa.core.parser import parse_tender
 
 
 def test_header_fields(sample_tender):
@@ -116,6 +119,18 @@ def test_subsection_with_no_priced_position_anywhere_is_pruned(sample_tender):
         return None
 
     assert find("6.5", sample_tender.sections) is None
+
+
+def test_parse_tender_accepts_a_file_like_object_not_just_a_path(sample_path):
+    # The Streamlit UI has an uploaded file's bytes in memory; forcing a
+    # round-trip through a temp file on disk is both slow to avoid caching
+    # and a way to leak copies of confidential tender pricing to /tmp.
+    with open(sample_path, "rb") as f:
+        buffer = io.BytesIO(f.read())
+
+    tender = parse_tender(buffer)
+
+    assert tender.subject == '№943-ТУ "Казачий 1 оч. НС_Генподряд"'
 
 
 def test_ges_placeholder_count(sample_tender):
