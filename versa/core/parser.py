@@ -155,12 +155,15 @@ def _fill_position_data(ws, position: Position, layout: Layout, warnings: list[W
         )
 
 
+_ACTUALLY_PRICED = (PriceStatus.PRICED, PriceStatus.LUMP_SUM)
+
+
 def _prune_empty_sections(sections: list[Section]) -> list[Section]:
     kept = []
     for section in sections:
         section.children = _prune_empty_sections(section.children)
         has_price = any(
-            price.status != PriceStatus.ZERO
+            price.status in _ACTUALLY_PRICED or position.baseline is not None
             for position in section.iter_positions()
             for price in position.participant_prices.values()
         )

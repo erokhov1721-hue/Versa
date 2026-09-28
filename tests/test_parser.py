@@ -30,15 +30,23 @@ def test_only_priced_sections_survive_empty_section_pruning(sample_tender):
     assert top_numbers == {"6", "10", "18"}
 
 
-def test_226_positions_in_surviving_sections(sample_tender):
+def test_positions_in_surviving_sections(sample_tender):
+    # 226 leaf positions exist under sections 6/10/18, but 12 of them sit in
+    # subsections where nobody actually priced anything (only ZERO/
+    # NOT_INCLUDED) — those subsections are pruned too, per the Global
+    # Constraint, leaving 214.
     total = sum(1 for s in sample_tender.sections for _ in s.iter_positions())
-    assert total == 226
+    assert total == 214
 
     by_number = {s.number: s for s in sample_tender.sections}
     facades_and_engineering = sum(
         1 for _ in by_number["6"].iter_positions()
     ) + sum(1 for _ in by_number["10"].iter_positions())
-    assert facades_and_engineering == 221  # the control number from the brief
+    # The brief's control totals (section 6/10 sums) were computed against
+    # the full 221 positions before this pruning fix, but the removed
+    # positions there all had a price of 0 for every participant, so the
+    # money-sum control numbers in test_aggregate.py are unaffected.
+    assert facades_and_engineering == 209
 
 
 def test_rik_customer_total_recomputed_not_read_from_broken_formula(sample_tender):
@@ -90,6 +98,24 @@ def test_lump_sum_warning_cites_real_pp_not_sheet_row(sample_tender):
     assert warning.participant_id == "fodd"
     assert "п/п 656" in warning.message
     assert "п/п 670" not in warning.message
+
+
+def test_subsection_with_no_priced_position_anywhere_is_pruned(sample_tender):
+    # 6.5 "Устройство модульного фасада": every participant is either ZERO
+    # or NOT_INCLUDED on every position — nobody actually priced anything
+    # here. The Global Constraint says drop it, but the old rule only
+    # checked "status != ZERO", which NOT_INCLUDED satisfies without any
+    # real price.
+    def find(number, sections):
+        for s in sections:
+            if s.number == number:
+                return s
+            found = find(number, s.children)
+            if found:
+                return found
+        return None
+
+    assert find("6.5", sample_tender.sections) is None
 
 
 def test_ges_placeholder_count(sample_tender):
