@@ -5,9 +5,10 @@ from pathlib import Path
 
 import streamlit as st
 
-from versa.core.compare import compare_tender
+from versa.core.compare import compare_section, compare_tender
 from versa.core.models import ComparisonMode
 from versa.core.parser import parse_tender
+from versa.ui.charts import deviation_heatmap, waterfall_by_section, waterfall_diff
 from versa.ui.formatting import to_millions
 
 st.set_page_config(page_title="Versa — сравнение КП", layout="wide")
@@ -53,6 +54,39 @@ for pid, value in ranked:
     name = tender.participant_by_id(pid).name
     deviation = f"+{(value - best) / best * 100:.1f}% от лучшего" if best else ""
     st.write(f"{name}: **{to_millions(value)} млн ₽** {deviation}")
+
+participant_ids = [p.id for p in tender.participants]
+
+st.markdown("### Разделы")
+for section in tender.sections:
+    result = compare_section(section, participant_ids, effective_mode)
+    cols = st.columns(len(participant_ids) + 1)
+    cols[0].write(f"**{section.number}. {section.title}**")
+    for i, pid in enumerate(participant_ids, start=1):
+        value = result.values.get(pid, 0.0)
+        is_min = result.min is not None and value == result.min
+        is_max = result.max is not None and value == result.max
+        style = "background-color: #d4f7d4" if is_min else ("background-color: #f7d4d4" if is_max else "")
+        cols[i].markdown(
+            f"<div style='{style}'>{tender.participant_by_id(pid).name}<br>{to_millions(value)}</div>",
+            unsafe_allow_html=True,
+        )
+
+st.markdown("### Водопад по разделам")
+selected_participant = st.selectbox("Участник", options=participant_ids,
+                                     format_func=lambda pid: tender.participant_by_id(pid).name)
+st.plotly_chart(waterfall_by_section(tender, selected_participant), width='stretch')
+
+st.markdown("### Разница между двумя участниками")
+col_a, col_b = st.columns(2)
+participant_a = col_a.selectbox("Участник A", options=participant_ids,
+                                 format_func=lambda pid: tender.participant_by_id(pid).name, key="pa")
+participant_b = col_b.selectbox("Участник Б", options=participant_ids,
+                                 format_func=lambda pid: tender.participant_by_id(pid).name, key="pb")
+st.plotly_chart(waterfall_diff(tender, participant_a, participant_b), width='stretch')
+
+st.markdown("### Тепловая карта отклонений от медианы")
+st.plotly_chart(deviation_heatmap(tender, participant_ids), width='stretch')
 
 st.markdown("### Предупреждения")
 if not tender.warnings:
