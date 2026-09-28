@@ -1,0 +1,54 @@
+from __future__ import annotations
+
+from typing import NamedTuple, Optional
+
+from versa.core.models import Position, Section
+
+
+class RawRow(NamedTuple):
+    row: int
+    b: Optional[str]
+    c: Optional[str]
+    d: Optional[str]
+
+
+def _is_blank(value: Optional[str]) -> bool:
+    return value is None or str(value).strip() == ""
+
+
+def _level(number: str) -> int:
+    return len(number.rstrip(".").split("."))
+
+
+def build_section_tree(rows: list[RawRow]) -> list[Section]:
+    roots: list[Section] = []
+    stack: list[Section] = []  # top of stack = current deepest open section
+
+    for raw in rows:
+        if not _is_blank(raw.b):
+            number = str(raw.b).strip().rstrip(".")
+            title = raw.c if not _is_blank(raw.c) else raw.d
+            level = _level(number)
+
+            while stack and stack[-1].level >= level:
+                stack.pop()
+
+            section = Section(row=raw.row, number=number, title=str(title).strip(),
+                               level=level)
+            if stack:
+                stack[-1].children.append(section)
+            else:
+                roots.append(section)
+            stack.append(section)
+
+        elif not _is_blank(raw.d):
+            if not stack:
+                continue  # position before any section header; nothing to attach to
+            position = Position(
+                row=raw.row, number=None, name=str(raw.d).strip(), unit=None,
+                customer_quantity=None, customer_comment=None, baseline=None,
+                participant_prices={},
+            )
+            stack[-1].positions.append(position)
+
+    return roots
